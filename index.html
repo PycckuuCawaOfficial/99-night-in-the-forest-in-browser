@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>99 Nights in the Forest - GitHub Edition</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Segoe UI', sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #fff; pointer-events: none; z-index: 10; }
+        #lock-indicator { 
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            color: #ffcc00; font-weight: bold; background: rgba(0,0,0,0.8); padding: 10px 25px; border-radius: 30px;
+            border: 2px solid #ffcc00; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .stats { font-size: 24px; font-weight: bold; text-shadow: 2px 2px #000; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <div class="stats" style="color: #ffcc00;">🕒 NIGHT 1</div>
+    <div class="stats" style="color: #00ff00;">🪵 LOGS: <span id="log-val">0</span> / 5</div>
+</div>
+
+<div id="lock-indicator">SHIFT LOCK: OFF (Press CTRL)</div>
+
+<script type="importmap">
+    { 
+        "imports": { 
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        } 
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+    import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+
+    // --- ИНИЦИАЛИЗАЦИЯ СЦЕНЫ ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x020205);
+    scene.fog = new THREE.FogExp2(0x020205, 0.04);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // Свет (Лунный свет и заполняющий)
+    const moonLight = new THREE.DirectionalLight(0x5555ff, 0.5);
+    moonLight.position.set(10, 20, 10);
+    scene.add(moonLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+
+    const objLoader = new OBJLoader();
+    const mtlLoader = new MTLLoader();
+
+    // --- ПЕРСОНАЖ (BACON HAIR) ---
+    const player = new THREE.Group();
+    const mat = (c) => new THREE.MeshStandardMaterial({color: c});
+    
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), mat(0x222222));
+    torso.position.y = 0.95;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mat(0xffffff));
+    head.position.y = 1.5;
+    const hair = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.15, 0.45), mat(0x442211));
+    hair.position.y = 1.7;
+    const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.25), mat(0x333333));
+    lLeg.position.set(-0.16, 0.3, 0);
+    const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.25), mat(0x333333));
+    rLeg.position.set(0.16, 0.3, 0);
+
+    player.add(torso, head, hair, lLeg, rLeg);
+    scene.add(player);
+
+    // --- ФУНКЦИЯ ЗАГРУЗКИ (ИСПРАВЛЕНА ДЛЯ GITHUB) ---
+    function loadSafeModel(path, name, pos, scale = 1, parent = scene) {
+        // Если открыто локально через file:// - предупреждаем о CORS
+        if (window.location.protocol === 'file:') {
+            console.warn(`[CORS] Не удается загрузить ${name} локально. Это сработает на GitHub!`);
+        }
+
+        mtlLoader.setPath(path);
+        mtlLoader.load(name + '.mtl', (materials) => {
+            materials.preload();
+            objLoader.setMaterials(materials);
+            objLoader.setPath(path);
+            objLoader.load(name + '.obj', (object) => {
+                object.position.copy(pos);
+                object.scale.setScalar(scale);
+                parent.add(object);
+                console.log(`✅ Загружено: ${name}`);
+            }, undefined, (err) => console.error(`❌ Ошибка OBJ для ${name}`, err));
+        }, undefined, (err) => console.error(`❌ Ошибка MTL для ${name} (Возможно, CORS)`, err));
+    }
+
+    // --- ЗАГРУЗКА ОБЪЕКТОВ ---
+    // Убедись, что пути ТОЧНО такие же на GitHub
+    loadSafeModel('models/models_game/', 'craft', new THREE.Vector3(16.1, 0, -4.6), 1);
+    loadSafeModel('models/item/', 'old_sack', new THREE.Vector3(0, 0.8, -0.25), 0.5, player);
+    loadSafeModel('models/models_animals/', 'wolf', new THREE.Vector3(-10, 0, -10), 1.2);
+
+    // Пол
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), mat(0x0a1a0a));
+    floor.rotation.x = -Math.PI/2;
+    scene.add(floor);
+
+    // Костер
+    const campfire = new THREE.Group();
+    const woodLog = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1), mat(0x3d2b1f));
+    woodLog.rotation.z = Math.PI/2;
+    campfire.add(woodLog);
+    const fireLight = new THREE.PointLight(0xff6600, 2, 15);
+    fireLight.position.y = 1;
+    campfire.add(fireLight);
+    scene.add(campfire);
+
+    // --- УПРАВЛЕНИЕ ---
+    let isLocked = false, yaw = 0, pitch = 0, camDist = 10;
+    const keys = {};
+
+    document.addEventListener('keydown', e => {
+        keys[e.code] = true;
+        if(e.code === 'ControlLeft') {
+            isLocked = !isLocked;
+            document.getElementById('lock-indicator').innerText = `SHIFT LOCK: ${isLocked ? 'ON' : 'OFF'}`;
+            if(isLocked) document.body.requestPointerLock(); else document.exitPointerLock();
+        }
+    });
+    document.addEventListener('keyup', e => keys[e.code] = false);
+
+    document.addEventListener('mousemove', e => {
+        if(isLocked || e.buttons === 2) {
+            yaw -= e.movementX * 0.003;
+            pitch = Math.max(-1.2, Math.min(1.2, pitch - e.movementY * 0.003));
+        }
+    });
+
+    function update() {
+        const move = new THREE.Vector3();
+        if(keys['KeyW']) move.z -= 1; if(keys['KeyS']) move.z += 1;
+        if(keys['KeyA']) move.x -= 1; if(keys['KeyD']) move.x += 1;
+
+        if(move.length() > 0) {
+            move.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+            player.position.add(move.multiplyScalar(0.2));
+            if(!isLocked) player.rotation.y = Math.atan2(move.x, move.z) + Math.PI;
+            
+            // Простая анимация ходьбы
+            lLeg.rotation.x = Math.sin(Date.now()*0.01)*0.6;
+            rLeg.rotation.x = -Math.sin(Date.now()*0.01)*0.6;
+        }
+
+        if(isLocked) player.rotation.y = yaw + Math.PI;
+
+        // Камера
+        const camDir = new THREE.Vector3(
+            Math.sin(yaw) * Math.cos(pitch) * camDist,
+            Math.sin(pitch) * camDist + 1.8,
+            Math.cos(yaw) * Math.cos(pitch) * camDist
+        );
+        camera.position.lerp(player.position.clone().add(camDir), 0.1);
+        camera.lookAt(player.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+
+        fireLight.intensity = 1.5 + Math.random() * 0.5;
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        update();
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
