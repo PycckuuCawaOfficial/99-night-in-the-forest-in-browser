@@ -20,19 +20,11 @@
 </div>
 <div id="lock-indicator">SHIFT LOCK: OFF (Press CTRL)</div>
 
-<script type="importmap">
-    { 
-        "imports": { 
-            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-        } 
-    }
-</script>
-
 <script type="module">
-    import * as THREE from 'three';
-    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-    import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+    // Прямые импорты без использования importmap для стабильности
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+    import { OBJLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/OBJLoader.js';
+    import { MTLLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/MTLLoader.js';
 
     // --- СЦЕНА ---
     const scene = new THREE.Scene();
@@ -74,18 +66,24 @@
         }, undefined, (err) => console.error("Ошибка загрузки MTL:", name));
     }
 
-    // РАССТАНОВКА
+    // РАССТАНОВКА МОДЕЛЕЙ
+    // 1. Костер в центре
     loadModel('models/models_game/', 'bonfire', new THREE.Vector3(0, 0, 0), 1.2);
     
-    // Лес вокруг
+    // 2. Лес вокруг (30 случайных деревьев)
     for(let i = 0; i < 30; i++) {
         const x = (Math.random() - 0.5) * 120;
         const z = (Math.random() - 0.5) * 120;
+        // Не ставим деревья в радиусе 10 метров от костра
         if (Math.sqrt(x*x + z*z) > 10) {
             const type = Math.random() > 0.3 ? 'tree' : 'big_tree';
             loadModel('models/models_game/', type, new THREE.Vector3(x, 0, z), 1.5 + Math.random() * 2);
         }
     }
+
+    // 3. Старые модели для теста
+    loadModel('models/models_game/', 'craft', new THREE.Vector3(5, 0, 5), 1.2);
+    loadModel('models/models_animals/', 'wolf', new THREE.Vector3(-10, 0, -10), 1.5);
 
     // --- ПОЛ ---
     const ground = new THREE.Mesh(
@@ -96,27 +94,28 @@
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // --- ПЕРСОНАЖ ---
+    // --- ПЕРСОНАЖ (ИГРОК) ---
     const player = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), new THREE.MeshStandardMaterial({color: 0x333333}));
-    body.position.y = 1;
+    body.position.y = 1; // Высота тела
     player.add(body);
     scene.add(player);
-    player.position.set(0, 0, 5); // Поставим чуть в стороне от костра
+    player.position.set(0, 0, 8); // Стартовая позиция чуть дальше от костра
 
-    // --- УПРАВЛЕНИЕ ---
+    // --- УПРАВЛЕНИЕ И КАМЕРА ---
     let isLocked = false, yaw = 0, pitch = 0;
     const keys = {};
 
     document.addEventListener('keydown', e => {
         keys[e.code] = true;
-        if(e.code === 'ControlLeft') {
+        if(e.code === 'ControlLeft' || e.code === 'ControlRight') {
             isLocked = !isLocked;
             document.getElementById('lock-indicator').innerText = `SHIFT LOCK: ${isLocked ? 'ON' : 'OFF'}`;
             if(isLocked) document.body.requestPointerLock(); else document.exitPointerLock();
         }
     });
     document.addEventListener('keyup', e => keys[e.code] = false);
+
     document.addEventListener('mousemove', e => {
         if(isLocked) {
             yaw -= e.movementX * 0.003;
@@ -124,19 +123,23 @@
         }
     });
 
+    // --- ЦИКЛ АНИМАЦИИ ---
     function animate() {
         requestAnimationFrame(animate);
         
         const move = new THREE.Vector3();
-        if(keys['KeyW']) move.z -= 1; if(keys['KeyS']) move.z += 1;
-        if(keys['KeyA']) move.x -= 1; if(keys['KeyD']) move.x += 1;
+        if(keys['KeyW']) move.z -= 1;
+        if(keys['KeyS']) move.z += 1;
+        if(keys['KeyA']) move.x -= 1;
+        if(keys['KeyD']) move.x += 1;
 
         if(move.length() > 0) {
             move.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
             player.position.add(move.multiplyScalar(0.2));
-            player.rotation.y = yaw + Math.PI;
+            player.rotation.y = yaw + Math.PI; // Поворачиваем игрока по направлению взгляда
         }
 
+        // Камера следует за игроком
         const camOffset = new THREE.Vector3(
             Math.sin(yaw) * Math.cos(pitch) * 12,
             Math.sin(pitch) * 12 + 4,
@@ -149,6 +152,7 @@
     }
     animate();
 
+    // Ресайз окна
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
