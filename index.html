@@ -2,55 +2,61 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>99 Nights - Forest Map</title>
+    <title>99 Nights - Fix Test</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; color: #000; pointer-events: none; z-index: 10; }
-        #lock-indicator { 
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            color: #fff; font-weight: bold; background: rgba(0,0,0,0.5); padding: 10px 20px; border-radius: 20px;
-        }
+        body { margin: 0; overflow: hidden; background: #87CEEB; }
+        #ui { position: absolute; top: 20px; left: 20px; color: white; text-shadow: 1px 1px 2px black; pointer-events: none; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div style="font-size: 24px; font-weight: bold;">🌲 ЛЕС И КОСТЕР</div>
-    <div style="font-size: 14px;">W,A,S,D - Ходить | CTRL - Обзор</div>
+    <h1>99 Nights: Лес</h1>
+    <p>Нажми <b>CTRL</b> для управления камерой</p>
+    <p>Ходьба: <b>W, A, S, D</b></p>
 </div>
-<div id="lock-indicator">SHIFT LOCK: OFF (Press CTRL)</div>
 
 <script type="module">
-    // Прямые импорты без использования importmap для стабильности
     import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     import { OBJLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/OBJLoader.js';
     import { MTLLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/MTLLoader.js';
 
-    // --- СЦЕНА ---
+    // --- 1. СЦЕНА И РЕНДЕР ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB);
-    scene.fog = new THREE.Fog(0x87CEEB, 10, 150);
-
+    scene.background = new THREE.Color(0x87CEEB); // Голубое небо
+    
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    // --- СВЕТ ---
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
+    // --- 2. СВЕТ ---
+    const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambient);
 
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    sunLight.position.set(50, 100, 50);
-    sunLight.castShadow = true;
-    scene.add(sunLight);
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.position.set(10, 20, 10);
+    sun.castShadow = true;
+    scene.add(sun);
 
-    // --- ЗАГРУЗКА МОДЕЛЕЙ ---
+    // --- 3. ПОЛ И СЕТКА (Чтобы видеть пространство) ---
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(200, 200),
+        new THREE.MeshStandardMaterial({ color: 0x355e3b })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    const grid = new THREE.GridHelper(200, 40, 0xffffff, 0x444444);
+    scene.add(grid);
+
+    // --- 4. ЗАГРУЗКА ОБЪЕКТОВ ---
     const objLoader = new OBJLoader();
     const mtlLoader = new MTLLoader();
 
-    function loadModel(path, name, pos, scale = 1) {
+    function safeLoad(path, name, pos, scale = 1) {
         mtlLoader.setPath(path);
         mtlLoader.load(name + '.mtl', (mtl) => {
             mtl.preload();
@@ -59,100 +65,80 @@
             objLoader.load(name + '.obj', (obj) => {
                 obj.position.copy(pos);
                 obj.scale.setScalar(scale);
-                obj.rotation.y = Math.random() * Math.PI * 2;
-                obj.traverse(n => { if(n.isMesh) { n.castShadow = true; n.receiveShadow = true; }});
+                obj.traverse(n => { if(n.isMesh) n.castShadow = true; });
                 scene.add(obj);
-            }, undefined, (err) => console.error("Ошибка загрузки OBJ:", name));
-        }, undefined, (err) => console.error("Ошибка загрузки MTL:", name));
+                console.log("Успешно загружен:", name);
+            }, undefined, (e) => console.error("Ошибка OBJ:", name));
+        }, undefined, (e) => console.error("Ошибка MTL:", name));
     }
 
-    // РАССТАНОВКА МОДЕЛЕЙ
-    // 1. Костер в центре
-    loadModel('models/models_game/', 'bonfire', new THREE.Vector3(0, 0, 0), 1.2);
-    
-    // 2. Лес вокруг (30 случайных деревьев)
-    for(let i = 0; i < 30; i++) {
-        const x = (Math.random() - 0.5) * 120;
-        const z = (Math.random() - 0.5) * 120;
-        // Не ставим деревья в радиусе 10 метров от костра
-        if (Math.sqrt(x*x + z*z) > 10) {
-            const type = Math.random() > 0.3 ? 'tree' : 'big_tree';
-            loadModel('models/models_game/', type, new THREE.Vector3(x, 0, z), 1.5 + Math.random() * 2);
-        }
-    }
+    // Загружаем твои модели
+    safeLoad('models/models_game/', 'bonfire', new THREE.Vector3(0, 0, 0), 1);
+    safeLoad('models/models_game/', 'tree', new THREE.Vector3(5, 0, -5), 2);
+    safeLoad('models/models_game/', 'big_tree', new THREE.Vector3(-8, 0, -10), 3);
+    safeLoad('models/models_animals/', 'wolf', new THREE.Vector3(-5, 0, 5), 1.2);
 
-    // 3. Старые модели для теста
-    loadModel('models/models_game/', 'craft', new THREE.Vector3(5, 0, 5), 1.2);
-    loadModel('models/models_animals/', 'wolf', new THREE.Vector3(-10, 0, -10), 1.5);
-
-    // --- ПОЛ ---
-    const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(500, 500),
-        new THREE.MeshStandardMaterial({ color: 0x2d4c1e })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    // --- ПЕРСОНАЖ (ИГРОК) ---
+    // --- 5. ИГРОК (Яркий красный куб) ---
     const player = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), new THREE.MeshStandardMaterial({color: 0x333333}));
-    body.position.y = 1; // Высота тела
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 2, 1), 
+        new THREE.MeshStandardMaterial({ color: 0xff0000 })
+    );
+    body.position.y = 1; 
     player.add(body);
+    player.position.set(0, 0, 15); // Начинаем чуть поодаль от центра
     scene.add(player);
-    player.position.set(0, 0, 8); // Стартовая позиция чуть дальше от костра
 
-    // --- УПРАВЛЕНИЕ И КАМЕРА ---
+    // --- 6. УПРАВЛЕНИЕ ---
     let isLocked = false, yaw = 0, pitch = 0;
     const keys = {};
 
-    document.addEventListener('keydown', e => {
+    document.addEventListener('keydown', (e) => {
         keys[e.code] = true;
-        if(e.code === 'ControlLeft' || e.code === 'ControlRight') {
+        if(e.code === 'ControlLeft') {
             isLocked = !isLocked;
-            document.getElementById('lock-indicator').innerText = `SHIFT LOCK: ${isLocked ? 'ON' : 'OFF'}`;
             if(isLocked) document.body.requestPointerLock(); else document.exitPointerLock();
         }
     });
-    document.addEventListener('keyup', e => keys[e.code] = false);
-
-    document.addEventListener('mousemove', e => {
+    document.addEventListener('keyup', (e) => keys[e.code] = false);
+    document.addEventListener('mousemove', (e) => {
         if(isLocked) {
             yaw -= e.movementX * 0.003;
-            pitch = Math.max(-1.5, Math.min(1.5, pitch - e.movementY * 0.003));
+            pitch = Math.max(-1, Math.min(1, pitch - e.movementY * 0.003));
         }
     });
 
-    // --- ЦИКЛ АНИМАЦИИ ---
+    // --- 7. ЦИКЛ ОБНОВЛЕНИЯ ---
     function animate() {
         requestAnimationFrame(animate);
-        
-        const move = new THREE.Vector3();
-        if(keys['KeyW']) move.z -= 1;
-        if(keys['KeyS']) move.z += 1;
-        if(keys['KeyA']) move.x -= 1;
-        if(keys['KeyD']) move.x += 1;
 
-        if(move.length() > 0) {
-            move.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-            player.position.add(move.multiplyScalar(0.2));
-            player.rotation.y = yaw + Math.PI; // Поворачиваем игрока по направлению взгляда
+        // Движение
+        const dir = new THREE.Vector3();
+        if(keys['KeyW']) dir.z -= 1;
+        if(keys['KeyS']) dir.z += 1;
+        if(keys['KeyA']) dir.x -= 1;
+        if(keys['KeyD']) dir.x += 1;
+
+        if(dir.length() > 0) {
+            dir.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+            player.position.add(dir.multiplyScalar(0.15));
+            player.rotation.y = yaw + Math.PI;
         }
 
-        // Камера следует за игроком
-        const camOffset = new THREE.Vector3(
-            Math.sin(yaw) * Math.cos(pitch) * 12,
-            Math.sin(pitch) * 12 + 4,
-            Math.cos(yaw) * Math.cos(pitch) * 12
+        // Камера (Третье лицо)
+        const camDist = 10;
+        camera.position.set(
+            player.position.x + Math.sin(yaw) * camDist,
+            player.position.y + 5 + pitch * 5,
+            player.position.z + Math.cos(yaw) * camDist
         );
-        camera.position.lerp(player.position.clone().add(camOffset), 0.1);
-        camera.lookAt(player.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+        camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
 
         renderer.render(scene, camera);
     }
+
     animate();
 
-    // Ресайз окна
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
